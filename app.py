@@ -22,7 +22,7 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str: # dish_name is the use
     print(f"DEBUG: Temporarily set os.environ['GOOGLE_API_KEY']")
 
     try:
-        model_name_for_langchain = "gemini-1.5-flash"
+        model_name_for_langchain = "gemini-pro"
         print(f"DEBUG: Initializing ChatGoogleGenerativeAI with model: '{model_name_for_langchain}'")
         llm = ChatGoogleGenerativeAI(
             model=model_name_for_langchain,
