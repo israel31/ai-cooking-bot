@@ -9,20 +9,39 @@ except ImportError:
     print("pysqlite3 not found, ChromaDB might face issues.") # For logging
     pass
 
+# ... (sqlite3 patch at the top) ...
 import streamlit as st
 from crewai import Agent, Task, Crew, Process
-from langchain_google_genai import ChatGoogleGenerativeAI # Back to this
+from langchain_google_genai import ChatGoogleGenerativeAI
 import os
-import traceback # For detailed error logging
+import traceback
+import litellm # Import litellm
+
+# --- Configure LiteLLM Model Alias ---
+# Do this ONCE at the top level of your script, before any LLM calls.
+# This tells LiteLLM to treat "models/gemini-1.5-flash" as if it were "gemini/gemini-1.5-flash"
+# and "models/gemini-pro" as "gemini/gemini-pro"
+# The key in the alias map is what LiteLLM will receive.
+# The value is what LiteLLM *should* use for the actual API call.
+litellm.model_alias_map = {
+    "models/gemini-1.5-flash": "gemini/gemini-1.5-flash",
+    "models/gemini-pro": "gemini/gemini-pro"
+}
+print(f"DEBUG: LiteLLM model_alias_map configured: {litellm.model_alias_map}")
+# --- End LiteLLM Configuration ---
+
 
 # --- Function to get AI Chef's Response ---
-def get_chef_recipe(dish_name: str, api_key: str) -> str: # dish_name is the user prompt
+def get_chef_recipe(dish_name: str, api_key: str) -> str:
     original_google_api_key_env = os.environ.get("GOOGLE_API_KEY")
-    os.environ["GOOGLE_API_KEY"] = api_key
+    os.environ["GOOGLE_API_KEY"] = api_key # Still good to have for LiteLLM
     print(f"DEBUG: Temporarily set os.environ['GOOGLE_API_KEY']")
 
     try:
-        model_name_for_langchain = "gemini-pro"
+        # Let's stick with gemini-1.5-flash for now, as it's current
+        model_name_for_langchain = "gemini-1.5-flash"
+        # model_name_for_langchain = "gemini-pro" # Can switch back if needed
+
         print(f"DEBUG: Initializing ChatGoogleGenerativeAI with model: '{model_name_for_langchain}'")
         llm = ChatGoogleGenerativeAI(
             model=model_name_for_langchain,
@@ -30,52 +49,76 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str: # dish_name is the use
             temperature=0.7,
             google_api_key=api_key
         )
+        # This will print "models/gemini-1.5-flash" or "models/gemini-pro"
         print(f"DEBUG: ChatGoogleGenerativeAI LLM object initialized. Internal model name: {getattr(llm, 'model', 'N/A')}")
 
-        master_chef = Agent(
-            role="Simple Responder", # Simpler role
-            goal="Respond to a simple greeting.", # Simpler goal
-            backstory="You are a friendly AI that just says hello.", # Simpler backstory
+        # Using the simplified agent/task for now to confirm LLM call works
+        simple_agent = Agent(
+            role="Simple Responder",
+            goal="Respond to a simple greeting.",
+            backstory="You are a friendly AI that just says hello.",
             verbose=True,
             llm=llm,
             allow_delegation=False
         )
 
-        # VERY SIMPLE TASK
-        simple_task_description = f"The user said: '{dish_name}'. Respond with a very short, friendly greeting. For example, if the user says 'Hi', you say 'Hello there!'."
-        print(f"DEBUG: Simple task description: {simple_task_description}")
-
-        recipe_task = Task( # Still named recipe_task for consistency in variable names
+        simple_task_description = f"The user said: '{dish_name}'. Respond with a very short, friendly greeting."
+        current_task = Task(
             description=simple_task_description,
             expected_output="A short, friendly greeting.",
-            agent=master_chef
+            agent=simple_agent
         )
-        print(f"DEBUG: Simple Task object created: {recipe_task}")
+        print(f"DEBUG: Task object created: {current_task.description}")
+
+        # Restore the original complex agent/task if the simple one works
+        # master_chef = Agent(
+        #     role="Chef de Cuisine or Executive Chef",
+        #     goal="Provide clear, step-by-step instructions on how to prepare any dish requested by the user.",
+        #     backstory="You are a world-renowned chef...",
+        #     verbose=True,
+        #     llm=llm,
+        #     allow_delegation=False
+        # )
+        # recipe_task_description = (
+        #     f"Create a detailed recipe for preparing {dish_name}. "
+        #     "The recipe should include: an introduction to the dish, "
+        #     "a list of ingredients with quantities (e.g., 2 cups, 100g), step-by-step preparation instructions, "
+        #     "cooking time, difficulty level, and any special tips or variations. "
+        #     "Ensure the instructions are very clear and easy for a home cook to follow. "
+        #     "Format the output nicely, using markdown for headings and lists where appropriate."
+        # )
+        # current_task = Task(
+        #     description=recipe_task_description,
+        #     expected_output=f"A comprehensive, well-formatted, and easy-to-follow recipe for {dish_name}.",
+        #     agent=master_chef
+        # )
+        # print(f"DEBUG: Task object created: {current_task.description}")
 
 
-        cooking_crew = Crew(
-            agents=[master_chef],
-            tasks=[recipe_task],
-            verbose=True, # Max verbosity
+        current_crew = Crew(
+            agents=[simple_agent], # or [master_chef] if using complex task
+            tasks=[current_task],
+            verbose=True,
             process=Process.sequential
         )
-        print(f"DEBUG: Crew object created: {cooking_crew}")
-        print("DEBUG: Crew and Task setup complete. Kicking off crew...") # This is the line we want to see
+        print(f"DEBUG: Crew object created.")
+        print("DEBUG: Crew and Task setup complete. Kicking off crew...")
 
-        result = cooking_crew.kickoff() # THE CALL
+        result = current_crew.kickoff()
 
-        print(f"DEBUG: Crew kickoff finished. Result: {str(result)}") # Print full result for simple task
-        return str(result) # Return the raw result for now
+        print(f"DEBUG: Crew kickoff finished. Result: {str(result)}")
+        return str(result)
 
     except Exception as e:
+        # ... (your existing exception handling) ...
         error_message = f"Error in get_chef_recipe: {type(e).__name__} - {e}"
         print(f"DEBUG: EXCEPTION CAUGHT IN get_chef_recipe: {error_message}")
         print(f"DEBUG: Full traceback for exception in get_chef_recipe:")
-        import traceback
         print(traceback.format_exc())
         st.error(f"An error occurred: {e}")
         return "Sorry, an error occurred during processing."
     finally:
+        # ... (your existing finally block to restore GOOGLE_API_KEY) ...
         if original_google_api_key_env is None:
             if os.environ.get("GOOGLE_API_KEY") == api_key:
                  del os.environ["GOOGLE_API_KEY"]
@@ -85,7 +128,8 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str: # dish_name is the use
             print(f"DEBUG: Restored os.environ['GOOGLE_API_KEY'] to original value: {original_google_api_key_env}")
 
 
-# --- Streamlit App Interface (remains the same as your last full version) ---
+# --- Streamlit App Interface (remains the same) ---
+# ... (no changes needed in the UI part) ...
 st.set_page_config(page_title="🍳 AI Master Chef", layout="wide")
 st.title("🍳 AI Master Chef Bot")
 st.markdown("Ask for any dish, and the AI Master Chef will give you the recipe!")
