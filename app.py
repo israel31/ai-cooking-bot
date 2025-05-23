@@ -24,13 +24,19 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
         # Ensure you have the correct model name.
         # 'gemini-1.5-flash' or 'gemini-1.5-flash-latest' are common.
         # 'gemini-pro' is also an option for potentially more detailed responses.
+        
+        model_to_use = "gemini-1.5-flash"  # Define it clearly here
+        print(f"DEBUG: Attempting to use Google Gemini model: '{model_to_use}' with ChatGoogleGenerativeAI") # DEBUG LINE
+        
         llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash-latest", # Or "gemini-1.5-flash-latest"
+            model=model_to_use, # Or "gemini-1.5-flash-latest"
             verbose=True,
             temperature=0.7,
             google_api_key=api_key
         )
 
+        print("DEBUG: ChatGoogleGenerativeAI LLM initialized.") # DEBUG LINE
+        
         # Define the Master Chef Agent
         master_chef = Agent(
             role="Chef de Cuisine or Executive Chef",
@@ -45,6 +51,8 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
             allow_delegation=False
         )
 
+        print("DEBUG: Crew and Task setup complete. Kicking off crew...") # DEBUG LINE
+        
         # Define the Task for the Chef
         recipe_task = Task(
             description=(
@@ -71,15 +79,25 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
 
         # Kick off the crew's work
         result = cooking_crew.kickoff()
+
+        print(f"DEBUG: Crew kickoff finished. Result: {str(result)[:200]}...") # DEBUG LINE (log snippet of result)
+        
         return result
 
     except Exception as e:
+
+        error_details = f"Error in get_chef_recipe: {type(e).__name__} - {e}"
+        print(f"DEBUG: EXCEPTION CAUGHT: {error_details}") # DEBUG LINE
+        # Also print the full traceback if possible, though Streamlit might truncate it in st.error
+        import traceback
+        print(traceback.format_exc()) # This will go to Streamlit Cloud logs
+        
         st.error(f"An error occurred while generating the recipe: {e}")
         return "Sorry, I couldn't prepare the recipe due to an error. Please check the logs or try again."
 
 # --- Streamlit App Interface ---
-st.set_page_config(page_title="🍳 AI Master Chef", layout="wide")
-st.title("🍳 AI Master Chef Bot")
+st.set_page_config(page_title="🍳 Alice", layout="wide")
+st.title("🍳Alice - AI Chef Bot")
 st.markdown("Ask for any dish, and the AI Master Chef will give you the recipe!")
 
 # Initialize chat history in session state
