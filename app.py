@@ -25,7 +25,7 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
         # 'gemini-1.5-flash' or 'gemini-1.5-flash-latest' are common.
         # 'gemini-pro' is also an option for potentially more detailed responses.
         llm = ChatGoogleGenerativeAI(
-            model="models/gemini-1.5-flash-latest", # Or "gemini-1.5-flash-latest"
+            model="gemini-1.5-flash-latest", # Or "gemini-1.5-flash-latest"
             verbose=True,
             temperature=0.7,
             google_api_key=api_key
