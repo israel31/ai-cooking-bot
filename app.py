@@ -1,3 +1,14 @@
+# Try to import and patch sqlite3 before anything else.
+# This is a common workaround for ChromaDB/sqlite3 issues on some platforms.
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+    print("Successfully patched sqlite3 with pysqlite3.") # For logging
+except ImportError:
+    print("pysqlite3 not found, ChromaDB might face issues.") # For logging
+    pass # Or raise an error if you want to be strict
+
 import streamlit as st
 from crewai import Agent, Task, Crew, Process
 from langchain_google_genai import ChatGoogleGenerativeAI
