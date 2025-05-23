@@ -7,11 +7,11 @@ try:
     print("Successfully patched sqlite3 with pysqlite3.") # For logging
 except ImportError:
     print("pysqlite3 not found, ChromaDB might face issues.") # For logging
-    pass
+    pass # Or raise an error if you want to be strict
 
 import streamlit as st
 from crewai import Agent, Task, Crew, Process
-from langchain_google_genai import ChatGoogleGenerativeAI # Make sure this is the one you're using
+from crewai.llms import LiteLLM as CrewAILiteLLM # Using CrewAI's LiteLLM wrapper
 import os
 import traceback # For detailed error logging
 
@@ -19,26 +19,31 @@ import traceback # For detailed error logging
 def get_chef_recipe(dish_name: str, api_key: str) -> str:
     """
     Initializes the CrewAI agent and tasks to get a recipe for the given dish.
+    Uses CrewAI's direct LiteLLM wrapper.
     """
+    original_google_api_key_env = os.environ.get("GOOGLE_API_KEY") # Store original, if any
+
     try:
-        # STEP 1: Define the model name CLEARLY and SIMPLY
-        # For Google AI Studio API keys (like yours: AIzaSy...),
-        # the model name for ChatGoogleGenerativeAI should be just the base name.
-        model_name_for_langchain = "gemini-1.5-flash"
-        # model_name_for_langchain = "gemini-pro" # You can also try this as an alternative
+        # For CrewAI's LiteLLM wrapper, LiteLLM expects "gemini/" prefix for Google AI Studio
+        model_for_crewai_litellm = "gemini/gemini-1.5-flash"
+        # model_for_crewai_litellm = "gemini/gemini-pro" # Alternative if 1.5-flash has issues or for different capabilities
 
-        print(f"DEBUG: Initializing ChatGoogleGenerativeAI with model: '{model_name_for_langchain}'")
+        print(f"DEBUG: Initializing CrewAI's LiteLLM wrapper with model: '{model_for_crewai_litellm}'")
 
-        # STEP 2: Initialize ChatGoogleGenerativeAI
-        llm = ChatGoogleGenerativeAI(
-            model=model_name_for_langchain,
-            verbose=True, # Good for Langchain's own debugging if needed
-            temperature=0.7,
-            google_api_key=api_key
-            # convert_system_message_to_human=True # Sometimes needed for Gemini, can try adding if issues persist AFTER fixing model name
+        # Set the API key as an environment variable for LiteLLM
+        # LiteLLM primarily checks os.environ for many API keys including Google's.
+        os.environ["GOOGLE_API_KEY"] = api_key
+
+        llm = CrewAILiteLLM(
+            model=model_for_crewai_litellm,
+            temperature=0.7
+            # Note: Some versions/configurations of LiteLLM might also accept an `api_key` parameter directly.
+            # If the environment variable method gives issues, you could check documentation for:
+            # llm = CrewAILiteLLM(model=..., temperature=..., api_key=api_key)
+            # However, for Google, os.environ["GOOGLE_API_KEY"] is the most standard way for LiteLLM.
         )
 
-        print(f"DEBUG: ChatGoogleGenerativeAI LLM object initialized: {llm}")
+        print(f"DEBUG: CrewAI LiteLLM object initialized: {llm}")
 
         # Define the Master Chef Agent
         master_chef = Agent(
@@ -49,8 +54,8 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
                 "You are currently based in Nigeria, bringing a unique fusion perspective. You pride yourself on "
                 "making complex dishes accessible to home cooks with detailed, easy-to-follow recipes."
             ),
-            verbose=True, # Good for CrewAI's own debugging
-            llm=llm,      # Pass the Langchain LLM object here
+            verbose=True, # CrewAI agent verbosity
+            llm=llm,      # Pass the CrewAI LiteLLM object
             allow_delegation=False
         )
 
@@ -74,23 +79,34 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
         cooking_crew = Crew(
             agents=[master_chef],
             tasks=[recipe_task],
-            verbose=2, # Increased verbosity for CrewAI to see more of its steps
+            verbose=2, # Crew verbosity (0, 1, or 2)
             process=Process.sequential
         )
 
         print("DEBUG: Crew and Task setup complete. Kicking off crew...")
         result = cooking_crew.kickoff()
-        print(f"DEBUG: Crew kickoff finished. Result snippet: {str(result)[:200]}...")
+        print(f"DEBUG: Crew kickoff finished. Result snippet: {str(result)[:200]}...") # Log a snippet
         return result
 
     except Exception as e:
         error_message = f"Error in get_chef_recipe: {type(e).__name__} - {e}"
         print(f"DEBUG: EXCEPTION CAUGHT IN get_chef_recipe: {error_message}")
         print("DEBUG: Full traceback for exception in get_chef_recipe:")
-        print(traceback.format_exc()) # This will print the full traceback to Streamlit Cloud logs
+        print(traceback.format_exc())
 
         st.error(f"An error occurred while generating the recipe. Details: {e}")
         return "Sorry, I couldn't prepare the recipe due to an error. Please check the logs and try again."
+    finally:
+        # Restore the original GOOGLE_API_KEY environment variable state
+        if original_google_api_key_env is None:
+            # If it wasn't set before, and we set it, remove it
+            if os.environ.get("GOOGLE_API_KEY") == api_key: # Check if we were the ones who set it to this value
+                del os.environ["GOOGLE_API_KEY"]
+        else:
+            # If it was set before, restore its original value
+            os.environ["GOOGLE_API_KEY"] = original_google_api_key_env
+        print(f"DEBUG: GOOGLE_API_KEY environment variable restored (if changed). Current value: {os.environ.get('GOOGLE_API_KEY')}")
+
 
 # --- Streamlit App Interface ---
 st.set_page_config(page_title="🍳 AI Master Chef", layout="wide")
@@ -107,24 +123,30 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Get GOOGLE_API_KEY from Streamlit secrets
-google_api_key = st.secrets.get("GOOGLE_API_KEY")
+# This key will be passed to get_chef_recipe and set as an environment variable temporarily
+google_api_key_from_secrets = st.secrets.get("GOOGLE_API_KEY")
 
-if not google_api_key:
+if not google_api_key_from_secrets:
     st.warning("Google API Key not found! Please add it to your Streamlit Cloud secrets (key: GOOGLE_API_KEY).", icon="⚠️")
-    st.stop()
+    st.stop() # Stop execution if key is not found
 
 # Get user input
 if prompt := st.chat_input("e.g., Jollof Rice, Spaghetti Carbonara, etc."):
+    # Add user message to history and display it
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Get AI response
     with st.chat_message("assistant"):
         with st.spinner("Chef is thinking... 🧑‍🍳"):
-            ai_response = get_chef_recipe(prompt, google_api_key)
+            # Pass the API key from secrets to the function
+            ai_response = get_chef_recipe(prompt, google_api_key_from_secrets)
             st.markdown(ai_response)
+            # Add AI response to history
             st.session_state.messages.append({"role": "assistant", "content": ai_response})
 
+# Optional: A button to clear chat history
 if st.sidebar.button("Clear Chat History"):
     st.session_state.messages = [{"role": "assistant", "content": "What dish would you like to learn how to cook today?"}]
     st.rerun()
