@@ -1,0 +1,5 @@
+streamlit
+crewai
+langchain-google-genai
+python-dotenv  # Good for local testing, not strictly needed for Streamlit Cloud secrets
+google-generativeai # crewai might pull this as a dependency of langchain-google-genai but good to be explicit
