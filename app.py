@@ -56,7 +56,7 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str: # dish_name is the use
         cooking_crew = Crew(
             agents=[master_chef],
             tasks=[recipe_task],
-            verbose=2, # Max verbosity
+            verbose=True, # Max verbosity
             process=Process.sequential
         )
         print(f"DEBUG: Crew object created: {cooking_crew}")
