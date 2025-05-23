@@ -143,6 +143,24 @@ for message in st.session_state.messages:
 
 google_api_key_from_secrets = st.secrets.get("GOOGLE_API_KEY")
 
+
+# --- TEMPORARY DEBUGGING: PRINT PART OF THE RETRIEVED KEY ---
+if google_api_key_from_secrets:
+    # Print first 8 and last 4 characters to verify without exposing the whole key in logs if possible
+    # For an AIzaSy... key, the first 8 are quite distinct.
+    key_preview = f"{google_api_key_from_secrets[:8]}...{google_api_key_from_secrets[-4:]}"
+    print(f"DEBUG: Retrieved GOOGLE_API_KEY from st.secrets. Key preview: {key_preview}")
+    print(f"DEBUG: Full retrieved key for self-check (REMOVE THIS PRINT FOR PRODUCTION): '{google_api_key_from_secrets}'") # More risky
+else:
+    print("DEBUG: GOOGLE_API_KEY not found in st.secrets!")
+# --- END TEMPORARY DEBUGGING ---
+
+
+if not google_api_key_from_secrets:
+    st.warning("Google API Key not found! Please add it to your Streamlit Cloud secrets (key: GOOGLE_API_KEY).", icon="⚠️")
+    st.stop()
+
+
 if not google_api_key_from_secrets:
     st.warning("Google API Key not found! Please add it to your Streamlit Cloud secrets (key: GOOGLE_API_KEY).", icon="⚠️")
     st.stop()
