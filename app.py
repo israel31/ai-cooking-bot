@@ -7,12 +7,13 @@ try:
     print("Successfully patched sqlite3 with pysqlite3.") # For logging
 except ImportError:
     print("pysqlite3 not found, ChromaDB might face issues.") # For logging
-    pass # Or raise an error if you want to be strict
+    pass
 
 import streamlit as st
 from crewai import Agent, Task, Crew, Process
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI # Make sure this is the one you're using
 import os
+import traceback # For detailed error logging
 
 # --- Function to get AI Chef's Response ---
 def get_chef_recipe(dish_name: str, api_key: str) -> str:
@@ -20,23 +21,25 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
     Initializes the CrewAI agent and tasks to get a recipe for the given dish.
     """
     try:
-        # Initialize the LLM (Google Gemini)
-        # Ensure you have the correct model name.
-        # 'gemini-1.5-flash' or 'gemini-1.5-flash-latest' are common.
-        # 'gemini-pro' is also an option for potentially more detailed responses.
-        
-        model_to_use = "gemini/gemini-1.5-flash"  # Define it clearly here
-        print(f"DEBUG: Attempting to use Google Gemini model: '{model_to_use}' with ChatGoogleGenerativeAI") # DEBUG LINE
-        
+        # STEP 1: Define the model name CLEARLY and SIMPLY
+        # For Google AI Studio API keys (like yours: AIzaSy...),
+        # the model name for ChatGoogleGenerativeAI should be just the base name.
+        model_name_for_langchain = "gemini-1.5-flash"
+        # model_name_for_langchain = "gemini-pro" # You can also try this as an alternative
+
+        print(f"DEBUG: Initializing ChatGoogleGenerativeAI with model: '{model_name_for_langchain}'")
+
+        # STEP 2: Initialize ChatGoogleGenerativeAI
         llm = ChatGoogleGenerativeAI(
-            model=model_to_use, # Or "gemini-1.5-flash-latest"
-            verbose=True,
+            model=model_name_for_langchain,
+            verbose=True, # Good for Langchain's own debugging if needed
             temperature=0.7,
             google_api_key=api_key
+            # convert_system_message_to_human=True # Sometimes needed for Gemini, can try adding if issues persist AFTER fixing model name
         )
 
-        print("DEBUG: ChatGoogleGenerativeAI LLM initialized.") # DEBUG LINE
-        
+        print(f"DEBUG: ChatGoogleGenerativeAI LLM object initialized: {llm}")
+
         # Define the Master Chef Agent
         master_chef = Agent(
             role="Chef de Cuisine or Executive Chef",
@@ -46,13 +49,11 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
                 "You are currently based in Nigeria, bringing a unique fusion perspective. You pride yourself on "
                 "making complex dishes accessible to home cooks with detailed, easy-to-follow recipes."
             ),
-            verbose=True,
-            llm=llm,
+            verbose=True, # Good for CrewAI's own debugging
+            llm=llm,      # Pass the Langchain LLM object here
             allow_delegation=False
         )
 
-        print("DEBUG: Crew and Task setup complete. Kicking off crew...") # DEBUG LINE
-        
         # Define the Task for the Chef
         recipe_task = Task(
             description=(
@@ -73,31 +74,27 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
         cooking_crew = Crew(
             agents=[master_chef],
             tasks=[recipe_task],
-            verbose=1, # 0 for no logs, 1 for some, 2 for detailed
+            verbose=2, # Increased verbosity for CrewAI to see more of its steps
             process=Process.sequential
         )
 
-        # Kick off the crew's work
+        print("DEBUG: Crew and Task setup complete. Kicking off crew...")
         result = cooking_crew.kickoff()
-
-        print(f"DEBUG: Crew kickoff finished. Result: {str(result)[:200]}...") # DEBUG LINE (log snippet of result)
-        
+        print(f"DEBUG: Crew kickoff finished. Result snippet: {str(result)[:200]}...")
         return result
 
     except Exception as e:
+        error_message = f"Error in get_chef_recipe: {type(e).__name__} - {e}"
+        print(f"DEBUG: EXCEPTION CAUGHT IN get_chef_recipe: {error_message}")
+        print("DEBUG: Full traceback for exception in get_chef_recipe:")
+        print(traceback.format_exc()) # This will print the full traceback to Streamlit Cloud logs
 
-        error_details = f"Error in get_chef_recipe: {type(e).__name__} - {e}"
-        print(f"DEBUG: EXCEPTION CAUGHT: {error_details}") # DEBUG LINE
-        # Also print the full traceback if possible, though Streamlit might truncate it in st.error
-        import traceback
-        print(traceback.format_exc()) # This will go to Streamlit Cloud logs
-        
-        st.error(f"An error occurred while generating the recipe: {e}")
-        return "Sorry, I couldn't prepare the recipe due to an error. Please check the logs or try again."
+        st.error(f"An error occurred while generating the recipe. Details: {e}")
+        return "Sorry, I couldn't prepare the recipe due to an error. Please check the logs and try again."
 
 # --- Streamlit App Interface ---
-st.set_page_config(page_title="🍳 Alice", layout="wide")
-st.title("🍳Alice - AI Chef Bot")
+st.set_page_config(page_title="🍳 AI Master Chef", layout="wide")
+st.title("🍳 AI Master Chef Bot")
 st.markdown("Ask for any dish, and the AI Master Chef will give you the recipe!")
 
 # Initialize chat history in session state
@@ -110,34 +107,24 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Get GOOGLE_API_KEY from Streamlit secrets
-# IMPORTANT: Users will need to set this in their Streamlit Cloud app settings
 google_api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not google_api_key:
     st.warning("Google API Key not found! Please add it to your Streamlit Cloud secrets (key: GOOGLE_API_KEY).", icon="⚠️")
-    st.stop() # Stop execution if key is not found
+    st.stop()
 
 # Get user input
 if prompt := st.chat_input("e.g., Jollof Rice, Spaghetti Carbonara, etc."):
-    # Add user message to history and display it
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Get AI response
     with st.chat_message("assistant"):
         with st.spinner("Chef is thinking... 🧑‍🍳"):
-            try:
-                ai_response = get_chef_recipe(prompt, google_api_key)
-                st.markdown(ai_response)
-                # Add AI response to history
-                st.session_state.messages.append({"role": "assistant", "content": ai_response})
-            except Exception as e:
-                error_message = f"Sorry, an error occurred: {str(e)}"
-                st.error(error_message)
-                st.session_state.messages.append({"role": "assistant", "content": error_message})
+            ai_response = get_chef_recipe(prompt, google_api_key)
+            st.markdown(ai_response)
+            st.session_state.messages.append({"role": "assistant", "content": ai_response})
 
-# Optional: A button to clear chat history
 if st.sidebar.button("Clear Chat History"):
     st.session_state.messages = [{"role": "assistant", "content": "What dish would you like to learn how to cook today?"}]
     st.rerun()
