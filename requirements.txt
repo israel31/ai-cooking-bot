@@ -3,4 +3,4 @@ crewai
 langchain-google-genai
 python-dotenv
 google-generativeai
-pysqlite3-binary #this as a dependency of langchain-google-genai but good to be explicit
+pysqlite3-binary
