@@ -16,83 +16,68 @@ import os
 import traceback # For detailed error logging
 
 # --- Function to get AI Chef's Response ---
-def get_chef_recipe(dish_name: str, api_key: str) -> str:
-    """
-    Initializes the CrewAI agent and tasks to get a recipe for the given dish.
-    Uses Langchain's ChatGoogleGenerativeAI.
-    """
-    # Store original env var for GOOGLE_API_KEY to restore it later
+def get_chef_recipe(dish_name: str, api_key: str) -> str: # dish_name is the user prompt
     original_google_api_key_env = os.environ.get("GOOGLE_API_KEY")
-    # LiteLLM (used by CrewAI) often picks up the GOOGLE_API_KEY from the environment
     os.environ["GOOGLE_API_KEY"] = api_key
     print(f"DEBUG: Temporarily set os.environ['GOOGLE_API_KEY']")
 
     try:
-        # Model name for ChatGoogleGenerativeAI
-        # We know this will internally become "models/gemini-1.5-flash"
         model_name_for_langchain = "gemini-1.5-flash"
-        # model_name_for_langchain = "gemini-pro" # Alternative for testing
-
         print(f"DEBUG: Initializing ChatGoogleGenerativeAI with model: '{model_name_for_langchain}'")
-
         llm = ChatGoogleGenerativeAI(
             model=model_name_for_langchain,
             verbose=True,
             temperature=0.7,
-            google_api_key=api_key # Explicitly pass API key here too
-            # convert_system_message_to_human=True # Can try this if LLM responses are odd
+            google_api_key=api_key
         )
-
-        # This debug line showed us that llm.model becomes "models/gemini-1.5-flash"
         print(f"DEBUG: ChatGoogleGenerativeAI LLM object initialized. Internal model name: {getattr(llm, 'model', 'N/A')}")
 
         master_chef = Agent(
-            role="Chef de Cuisine or Executive Chef",
-            goal="Provide clear, step-by-step instructions on how to prepare any dish requested by the user.",
-            backstory=(
-                "You are a world-renowned chef with extensive experience in cooking styles from every continent. "
-                "You are currently based in Nigeria, bringing a unique fusion perspective. You pride yourself on "
-                "making complex dishes accessible to home cooks with detailed, easy-to-follow recipes."
-            ),
+            role="Simple Responder", # Simpler role
+            goal="Respond to a simple greeting.", # Simpler goal
+            backstory="You are a friendly AI that just says hello.", # Simpler backstory
             verbose=True,
             llm=llm,
             allow_delegation=False
         )
 
-        recipe_task = Task(
-            description=(
-                f"Create a detailed recipe for preparing {dish_name}. "
-                # ... (full description)
-            ),
-            expected_output=(
-                f"A comprehensive, well-formatted, and easy-to-follow recipe for {dish_name}."
-            ),
+        # VERY SIMPLE TASK
+        simple_task_description = f"The user said: '{dish_name}'. Respond with a very short, friendly greeting. For example, if the user says 'Hi', you say 'Hello there!'."
+        print(f"DEBUG: Simple task description: {simple_task_description}")
+
+        recipe_task = Task( # Still named recipe_task for consistency in variable names
+            description=simple_task_description,
+            expected_output="A short, friendly greeting.",
             agent=master_chef
         )
+        print(f"DEBUG: Simple Task object created: {recipe_task}")
+
 
         cooking_crew = Crew(
             agents=[master_chef],
             tasks=[recipe_task],
-            verbose=2,
+            verbose=2, # Max verbosity
             process=Process.sequential
         )
+        print(f"DEBUG: Crew object created: {cooking_crew}")
+        print("DEBUG: Crew and Task setup complete. Kicking off crew...") # This is the line we want to see
 
-        print("DEBUG: Crew and Task setup complete. Kicking off crew...")
-        result = cooking_crew.kickoff()
-        print(f"DEBUG: Crew kickoff finished. Result snippet: {str(result)[:200]}...")
-        return result
+        result = cooking_crew.kickoff() # THE CALL
+
+        print(f"DEBUG: Crew kickoff finished. Result: {str(result)}") # Print full result for simple task
+        return str(result) # Return the raw result for now
 
     except Exception as e:
         error_message = f"Error in get_chef_recipe: {type(e).__name__} - {e}"
         print(f"DEBUG: EXCEPTION CAUGHT IN get_chef_recipe: {error_message}")
-        print("DEBUG: Full traceback for exception in get_chef_recipe:")
+        print(f"DEBUG: Full traceback for exception in get_chef_recipe:")
+        import traceback
         print(traceback.format_exc())
-        st.error(f"An error occurred while generating the recipe. Details: {e}")
-        return "Sorry, I couldn't prepare the recipe due to an error."
+        st.error(f"An error occurred: {e}")
+        return "Sorry, an error occurred during processing."
     finally:
-        # Restore the original GOOGLE_API_KEY environment variable state
         if original_google_api_key_env is None:
-            if os.environ.get("GOOGLE_API_KEY") == api_key: # Check if we were the ones who set it
+            if os.environ.get("GOOGLE_API_KEY") == api_key:
                  del os.environ["GOOGLE_API_KEY"]
                  print("DEBUG: Restored os.environ['GOOGLE_API_KEY'] by deleting.")
         else:
