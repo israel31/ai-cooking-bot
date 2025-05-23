@@ -25,7 +25,7 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
         # 'gemini-1.5-flash' or 'gemini-1.5-flash-latest' are common.
         # 'gemini-pro' is also an option for potentially more detailed responses.
         
-        model_to_use = "gemini-1.5-flash"  # Define it clearly here
+        model_to_use = "gemini/gemini-1.5-flash"  # Define it clearly here
         print(f"DEBUG: Attempting to use Google Gemini model: '{model_to_use}' with ChatGoogleGenerativeAI") # DEBUG LINE
         
         llm = ChatGoogleGenerativeAI(
