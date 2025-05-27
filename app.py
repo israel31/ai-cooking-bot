@@ -39,7 +39,7 @@ def get_chef_recipe(dish_name: str, api_key: str) -> str:
 
     try:
         # Let's stick with gemini-1.5-flash for now, as it's current
-        model_name_for_langchain = "gemini-1.5-flash"
+        model_name_for_langchain = "gemini-2.0-flash"
         # model_name_for_langchain = "gemini-pro" # Can switch back if needed
 
         print(f"DEBUG: Initializing ChatGoogleGenerativeAI with model: '{model_name_for_langchain}'")
