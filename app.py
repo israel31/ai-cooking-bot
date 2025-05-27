@@ -24,7 +24,7 @@ import litellm # Import litellm
 # The key in the alias map is what LiteLLM will receive.
 # The value is what LiteLLM *should* use for the actual API call.
 litellm.model_alias_map = {
-    "models/gemini-1.5-flash": "gemini/gemini-1.5-flash",
+    "models/gemini-2.0-flash": "gemini/gemini-2.0-flash",
     "models/gemini-pro": "gemini/gemini-pro"
 }
 print(f"DEBUG: LiteLLM model_alias_map configured: {litellm.model_alias_map}")
